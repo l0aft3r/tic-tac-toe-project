@@ -63,19 +63,43 @@ function Gameboard() {
 
 function GameController(playerOneName = "Player1", playerTwoName = "Player2") {
     const board = Gameboard();
+    let gameEnded = false;
+    let movesPlayed = 0;
 
     const players = [
         {
             name: playerOneName,
-            token: 1
+            token: 1,
+            score: 0
         },
         {
             name: playerTwoName,
-            token: 2
+            token: 2,
+            score: 0
         }
     ];
 
     let activePlayer = players[0];
+
+    const addScore = (winner) => {
+        winner.score++;
+    }
+
+    const changeName = (index, newName) => {
+        players[index].name = newName;
+    }
+
+    const getScores = () => [players[0].score, players[1].score];
+
+    const resetGame = () => {
+        players[0].score = 0;
+        players[1].score = 0;
+        gameEnded = false;
+        movesPlayed = 0;
+        board.resetBoard();
+        activePlayer = players[0];
+        return;
+    };
 
     const switchPlayerTurn = () => {
         activePlayer = activePlayer === players[0]? players[1]: players[0];
@@ -97,17 +121,29 @@ function GameController(playerOneName = "Player1", playerTwoName = "Player2") {
     };
 
     const playRound = (row, column) => {
-        if (board.isOccupied(row,column)) {
+        if (gameEnded) {
+            gameEnded = false;
+            movesPlayed = 0;
+            board.resetBoard();
+            activePlayer = players[0];
+            return;
+        } else if (board.isOccupied(row,column)) {
             printAlreadyOccupied();
             return;
+        } else if (board.dropToken(row, column, activePlayer.token)) { //If someone won
+            printWinner(getActivePlayer());
+            addScore(getActivePlayer());
+            gameEnded = true;
+            return getActivePlayer().name;
         }
-        console.log(`Dropping ${getActivePlayer().name}'s token into row ${row}, column ${column}...`);
-        if (board.dropToken(row, column, activePlayer.token)) { //If someone won
-            printWinner();
-            board.resetBoard();
-        }
+        movesPlayed++;
         switchPlayerTurn();
         printNewRound();
+        if (movesPlayed >= 9) {
+            gameEnded = true
+            movesPlayed = 0;
+            return 'tie';
+        }
     }
 
     printNewRound();
@@ -115,8 +151,100 @@ function GameController(playerOneName = "Player1", playerTwoName = "Player2") {
     return {
         playRound,
         getActivePlayer,
-        getBoard: board.getBoard
+        getBoard: board.getBoard,
+        changeName,
+        getScores,
+        resetGame
     };
 }
 
-const game = GameController();
+function ScreenController() {
+    const game = GameController();
+    const playerTurnDiv = document.querySelector('.turn');
+    const boardDiv = document.querySelector('.board');
+    const dialog = document.querySelector('.declare');
+    const inputOne = document.querySelector('.player1');
+    const inputTwo = document.querySelector('.player2');
+    const scoreOne = document.querySelector('.scoreOne');
+    const scoreTwo = document.querySelector('.scoreTwo');
+    const resetBtn = document.querySelector('.resetBtn');
+
+    resetBtn.addEventListener("click", () => {
+        console.log('H')
+        game.resetGame();
+        updateScreen();
+    });
+
+    inputOne.addEventListener("input", () => {
+        game.changeName(0, inputOne.value);
+        updateScreen();
+    });
+
+    inputOne.addEventListener("onchange", () => {
+        game.changeName(1, inputTwo.value);
+        updateScreen();
+    });
+    
+    dialog.close();
+
+    dialog.addEventListener("click", () => {
+        game.playRound(0,0);
+        updateScreen();
+        dialog.close();
+    });
+
+    const updateScreen = () => {
+        boardDiv.textContent = "";
+        
+        const board = game.getBoard();
+        const activePlayer = game.getActivePlayer();
+
+        playerTurnDiv.textContent = `${activePlayer.name}'s turn...`;
+        scoreOne.textContent = `Score: ${game.getScores()[0]}`;
+        scoreTwo.textContent = `Score: ${game.getScores()[1]}`;
+
+        board.forEach((row, rowIndex) => {
+            row.forEach((cell, index) => {
+                const cellButton = document.createElement("button");
+                cellButton.classList.add("cell");
+
+                cellButton.dataset.column = index;
+                cellButton.dataset.row = rowIndex;
+                cellButton.textContent = (() => {
+                    switch (cell.getValue()){
+                        case 0:
+                            return '';
+                        case 1:
+                            return 'X';
+                        case 2: 
+                            return 'O';
+                    }
+                })();
+                boardDiv.appendChild(cellButton);
+            })
+        })
+    }
+
+    function clickHandlerBoard(e) {
+        const selectedColumn = e.target.dataset.column;
+        const selectedRow = e.target.dataset.row;
+
+        if (!selectedColumn || !selectedRow) return;
+
+        const result = game.playRound(selectedRow, selectedColumn);
+        updateScreen();
+        if (result) {
+            if (result === 'tie') {
+                dialog.textContent = "It's a tie!";
+            } else {
+                dialog.textContent = `${result} wins!`;
+            }
+            dialog.showModal();
+        }
+    }
+    boardDiv.addEventListener("click", clickHandlerBoard);
+
+    updateScreen();
+}
+
+ScreenController();
